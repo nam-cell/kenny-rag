@@ -155,19 +155,7 @@ async def handle_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     # Handle command buttons
     if query.data == "cmd:sources":
-        all_meta = collection.get(include=["metadatas"])["metadatas"]
-        seen = {}
-        for m in all_meta:
-            name = m.get("source_name", "unknown")
-            url = m.get("source_url", "")
-            if name not in seen and url:
-                seen[name] = url
-        text = f"📚 Knowledge Base — {len(seen)} verified sources\n\n"
-        for name, url in sorted(seen.items()):
-            text += f"- {name}\n  {url}\n\n"
-        if len(text) > 4096:
-            text = text[:4090] + "..."
-        await query.message.reply_text(text, disable_web_page_preview=True)
+        await send_resources(query.message)
         return
 
     # Handle question buttons
@@ -205,21 +193,97 @@ async def cmd_help(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def cmd_sources(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """List all unique sources with URLs."""
-    all_meta = collection.get(include=["metadatas"])["metadatas"]
-    seen = {}
-    for m in all_meta:
-        name = m.get("source_name", "unknown")
-        url = m.get("source_url", "")
-        if name not in seen and url:
-            seen[name] = url
-    text = f"📚 Knowledge Base — {len(seen)} verified sources\n\n"
-    for name, url in sorted(seen.items()):
-        text += f"- {name}\n  {url}\n\n"
-    # Telegram limit
-    if len(text) > 4096:
-        text = text[:4090] + "..."
-    await update.message.reply_text(text, disable_web_page_preview=True)
+    """Send the curated resource catalog by category."""
+    await send_resources(update.message)
+
+
+async def send_resources(target_message):
+    """Send the full curated catalog as categorized messages."""
+    sections = [
+        (
+            "🎬 Streaming / Documentary",
+            "People of Comedy: Celebrating 30 Years of the Nubian Show\n"
+            "Crave · Dir. Darell Faria · Premiered April 9, 2025\n"
+            "Premier documentary. Features Russell Peters, Hassan Phills, Zabrina Douglas, Marc Trinidad. Must-watch.\n"
+            "▸ Available on Crave (subscription)\n\n"
+            "The Eh-List — Kenny Robinson Standup Special\n"
+            "New Metric Media (Letterkenny, Shoresy) · Signed July 2025\n"
+            "Upcoming standup special + album. In development.\n"
+            "▸ https://deadline.com/2025/07/eh-list-standup-specials-kenny-robinson-new-metric-media-1236464843/"
+        ),
+        (
+            "📺 News / Video",
+            "Comedian Kenny Robinson\n"
+            "Global News · Feb 15, 2017 · 5:02 video\n"
+            "▸ https://globalnews.ca/video/3905228/comedian-kenny-robinson"
+        ),
+        (
+            "🎙️ Podcasts & Interviews",
+            'Kenny Robinson is "elbows up" for Canadian comedians\n'
+            "CBC Q with Tom Power · April 7, 2025 · 23 min\n"
+            "Discusses 30-year Nubian legacy, Canadian vs American comics. Highly recommended.\n"
+            "▸ CBC: https://www.cbc.ca/arts/q/kenny-robinson-is-elbows-up-for-canadian-comedians-1.7503763\n"
+            "▸ Apple Podcasts: https://podcasts.apple.com/us/podcast/kenny-robinson-is-elbows-up-for-canadian-comedians/id256943801?i=1000702483131\n"
+            "▸ Spotify: https://open.spotify.com/episode/2P6XiEY5eO4CocYAyKYkQ3\n\n"
+            "Season 4, Episode 28 — Kenny Robinson\n"
+            "Ted Woloshyn Podcast · April 17, 2025\n"
+            "▸ https://www.tedwoloshyn.ca/season-4-episode-28-kenny-robinson/\n\n"
+            "Episode 88 — Kenny Robinson\n"
+            "Spreaker · In-depth career retrospective\n"
+            "▸ https://www.spreaker.com/episode/episode-88-kenny-robinson--50909181"
+        ),
+        (
+            "🎵 Comedy Albums",
+            "Kenny Robinson's Nubian Comedy Revue: The Next 25 (2020)\n"
+            "▸ https://www.amazon.com/Kenny-Robinsons-Nubian-Comedy-Revue/dp/B08FCQ9ZDL\n\n"
+            '"9 Confirmed Kills" (single track)\n'
+            "▸ https://www.amazon.com/9-Confirmed-Kills/dp/B08FCRW793"
+        ),
+        (
+            "📰 Key Articles & Profiles",
+            "Kenny Robinson — Full Biography\n"
+            "The Comedy Green Room · Essential reading\n"
+            "▸ https://www.thecomedygreenroom.com/post/kenny-robinson\n\n"
+            "40 at 40: Godfather of Canadian Comedy\n"
+            "NOW Toronto · 2021 retrospective\n"
+            "▸ https://nowtoronto.com/culture/40-at-40-kenny-robinson-godfather-of-canadian-comedy/\n\n"
+            "Kenny Robinson: comedian (Q&A)\n"
+            "Globe and Mail · Feb 2011\n"
+            "▸ https://www.theglobeandmail.com/news/toronto/kenny-robinson-comedian/article565003/\n\n"
+            "Original-Cin Chat: 30 Years of Nubian Comedy\n"
+            "Original Cin · April 2025\n"
+            "▸ https://www.original-cin.ca/posts/2025/4/8/original-cin-chat-nubian-show-founder-kenny-robinson-on-30-years-of-comedy-and-a-crave-debut\n\n"
+            "The Godfather of Comedy: 25 Years of Nubian\n"
+            "CBC Comedy · Nov 2020\n"
+            "▸ https://www.cbc.ca/comedy/the-godfather-of-comedy-kenny-robinson-celebrates-25-years-of-his-successful-nubian-comedy-revue-1.5804743\n\n"
+            "Kenny Robinson Celebrates 30 Years\n"
+            "The Caribbean Camera · April 2025\n"
+            "▸ https://thecaribbeancamera.com/kenny-robinson-nubian-show-30-years/"
+        ),
+        (
+            "🎭 TV & Film Highlights",
+            "After Hours with Kenny Robinson (2001) — Comedy Network\n"
+            "▸ https://www.imdb.com/title/tt0320809/\n\n"
+            "Comedy Now! — Kenny Robinson (2007) — CTV\n"
+            "▸ https://www.imdb.com/title/tt1434488/\n\n"
+            "Film: Repo Men, Down to Earth, New York Minute, The Third Miracle\n"
+            "▸ Full filmography: https://www.imdb.com/name/nm0732811/"
+        ),
+        (
+            "🌐 Social & Web",
+            "Official Website: https://www.kennyrobinson.com/\n"
+            "X/Twitter: https://x.com/thenubianshow\n"
+            "Wikipedia: https://en.wikipedia.org/wiki/Kenny_Robinson_(comedian)\n"
+            "IMDb: https://www.imdb.com/name/nm0732811/\n"
+            "Booking (Yuk Yuk's): https://www.funnybusiness.ca/comedians.php?standup=kenny-robinson"
+        ),
+    ]
+
+    for title, body in sections:
+        text = f"{title}\n{'─' * 30}\n\n{body}"
+        if len(text) > 4096:
+            text = text[:4090] + "..."
+        await target_message.reply_text(text, disable_web_page_preview=True)
 
 
 async def cmd_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
