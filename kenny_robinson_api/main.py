@@ -133,6 +133,7 @@ async def cmd_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         ],
         [
             InlineKeyboardButton("What should I watch first?", callback_data="q:What Kenny Robinson content should I watch first?"),
+            InlineKeyboardButton("📚 Resources & Links", callback_data="cmd:sources"),
         ],
     ]
     await update.message.reply_text(
@@ -148,9 +149,28 @@ async def cmd_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def handle_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Handle inline keyboard button presses — route to RAG pipeline."""
+    """Handle inline keyboard button presses."""
     query = update.callback_query
     await query.answer()
+
+    # Handle command buttons
+    if query.data == "cmd:sources":
+        all_meta = collection.get(include=["metadatas"])["metadatas"]
+        seen = {}
+        for m in all_meta:
+            name = m.get("source_name", "unknown")
+            url = m.get("source_url", "")
+            if name not in seen and url:
+                seen[name] = url
+        text = f"📚 Knowledge Base — {len(seen)} verified sources\n\n"
+        for name, url in sorted(seen.items()):
+            text += f"- {name}\n  {url}\n\n"
+        if len(text) > 4096:
+            text = text[:4090] + "..."
+        await query.message.reply_text(text, disable_web_page_preview=True)
+        return
+
+    # Handle question buttons
     question = query.data.removeprefix("q:")
     # Send a placeholder so user knows we're working
     thinking_msg = await query.message.reply_text("🔍 Searching Kenny Robinson research...")
@@ -185,12 +205,21 @@ async def cmd_help(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def cmd_sources(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """List all unique sources in the DB."""
+    """List all unique sources with URLs."""
     all_meta = collection.get(include=["metadatas"])["metadatas"]
-    sources = sorted(set(m.get("source_name", "unknown") for m in all_meta))
-    text = f"Knowledge base: {len(sources)} sources\n\n"
-    text += "\n".join(f"- {s}" for s in sources)
-    await update.message.reply_text(text)
+    seen = {}
+    for m in all_meta:
+        name = m.get("source_name", "unknown")
+        url = m.get("source_url", "")
+        if name not in seen and url:
+            seen[name] = url
+    text = f"📚 Knowledge Base — {len(seen)} verified sources\n\n"
+    for name, url in sorted(seen.items()):
+        text += f"- {name}\n  {url}\n\n"
+    # Telegram limit
+    if len(text) > 4096:
+        text = text[:4090] + "..."
+    await update.message.reply_text(text, disable_web_page_preview=True)
 
 
 async def cmd_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
