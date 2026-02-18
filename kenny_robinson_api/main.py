@@ -11,11 +11,12 @@ from contextlib import asynccontextmanager
 import chromadb
 import httpx
 from fastapi import FastAPI
-from telegram import Update
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import (
     Application,
     CommandHandler,
     MessageHandler,
+    CallbackQueryHandler,
     filters,
     ContextTypes,
 )
@@ -120,13 +121,54 @@ Question: {question}"""
 
 # --- Telegram Handlers ---
 async def cmd_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    first_name = update.effective_user.first_name or "there"
+    keyboard = [
+        [
+            InlineKeyboardButton("How did Kenny get started?", callback_data="q:How did Kenny get started in comedy?"),
+            InlineKeyboardButton("What's the Nubian show?", callback_data="q:What is the Nubian Comedy Revue?"),
+        ],
+        [
+            InlineKeyboardButton("Who has he worked with?", callback_data="q:Who has Kenny Robinson worked with and mentored?"),
+            InlineKeyboardButton("What awards has he won?", callback_data="q:What awards has Kenny Robinson won?"),
+        ],
+        [
+            InlineKeyboardButton("What should I watch first?", callback_data="q:What Kenny Robinson content should I watch first?"),
+        ],
+    ]
     await update.message.reply_text(
-        "Hey! I'm the Kenny Robinson Research Bot.\n\n"
-        "Ask me anything about Kenny Robinson — The Godfather of Canadian Comedy.\n\n"
-        "I'll search through 18 verified sources (articles, interviews, bios) "
-        "and give you sourced answers.\n\n"
-        "Just type your question!"
+        f"Hey {first_name}! 👋 I'm loaded up with research on Kenny Robinson — "
+        f"the Godfather of Canadian Comedy himself.\n\n"
+        f"Ask me anything about his background, career, the Nubian show, "
+        f"his mentorship style, who he's worked with, or how to make the most "
+        f"of this connection.\n\n"
+        f"You can also use /sources to browse all the verified links.\n\n"
+        f"This is a huge opportunity — what do you want to know?",
+        reply_markup=InlineKeyboardMarkup(keyboard),
     )
+
+
+async def handle_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handle inline keyboard button presses — route to RAG pipeline."""
+    query = update.callback_query
+    await query.answer()
+    question = query.data.removeprefix("q:")
+    # Show typing indicator
+    await query.message.chat.send_action("typing")
+    try:
+        chunks = await retrieve_chunks(question)
+        if not chunks:
+            await query.message.reply_text("I couldn't find relevant info. Try rephrasing?")
+            return
+        answer = await generate_answer(question, chunks)
+        source_names = sorted(set(c["source_name"] for c in chunks))
+        source_line = "\n\n📚 Sources: " + ", ".join(source_names)
+        full_reply = answer + source_line
+        if len(full_reply) > 4096:
+            full_reply = full_reply[:4090] + "..."
+        await query.message.reply_text(full_reply)
+    except Exception as e:
+        logger.error(f"Button RAG error: {e}", exc_info=True)
+        await query.message.reply_text("Sorry, something went wrong. Please try again.")
 
 
 async def cmd_help(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -226,6 +268,7 @@ async def main():
     app.add_handler(CommandHandler("help", cmd_help))
     app.add_handler(CommandHandler("sources", cmd_sources))
     app.add_handler(CommandHandler("stats", cmd_stats))
+    app.add_handler(CallbackQueryHandler(handle_button))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
 
     logger.info("Starting Kenny RAG bot (polling mode)...")
