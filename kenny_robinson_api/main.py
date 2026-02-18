@@ -152,12 +152,12 @@ async def handle_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
     question = query.data.removeprefix("q:")
-    # Show typing indicator
-    await query.message.chat.send_action("typing")
+    # Send a placeholder so user knows we're working
+    thinking_msg = await query.message.reply_text("🔍 Searching Kenny Robinson research...")
     try:
         chunks = await retrieve_chunks(question)
         if not chunks:
-            await query.message.reply_text("I couldn't find relevant info. Try rephrasing?")
+            await thinking_msg.edit_text("I couldn't find relevant info. Try rephrasing?")
             return
         answer = await generate_answer(question, chunks)
         source_names = sorted(set(c["source_name"] for c in chunks))
@@ -165,10 +165,10 @@ async def handle_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
         full_reply = answer + source_line
         if len(full_reply) > 4096:
             full_reply = full_reply[:4090] + "..."
-        await query.message.reply_text(full_reply)
+        await thinking_msg.edit_text(full_reply)
     except Exception as e:
         logger.error(f"Button RAG error: {e}", exc_info=True)
-        await query.message.reply_text("Sorry, something went wrong. Please try again.")
+        await thinking_msg.edit_text("Sorry, something went wrong. Please try again.")
 
 
 async def cmd_help(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -210,13 +210,13 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not question:
         return
 
-    # Show typing indicator
-    await update.message.chat.send_action("typing")
+    # Send a placeholder so user knows we're working
+    thinking_msg = await update.message.reply_text("🔍 Searching Kenny Robinson research...")
 
     try:
         chunks = await retrieve_chunks(question)
         if not chunks:
-            await update.message.reply_text(
+            await thinking_msg.edit_text(
                 "I couldn't find any relevant information in my sources. "
                 "Try rephrasing your question?"
             )
@@ -233,11 +233,11 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if len(full_reply) > 4096:
             full_reply = full_reply[:4090] + "..."
 
-        await update.message.reply_text(full_reply)
+        await thinking_msg.edit_text(full_reply)
 
     except Exception as e:
         logger.error(f"RAG pipeline error: {e}", exc_info=True)
-        await update.message.reply_text(
+        await thinking_msg.edit_text(
             "Sorry, something went wrong processing your question. Please try again."
         )
 
