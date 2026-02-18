@@ -1,0 +1,24 @@
+# Kenny Robinson RAG Bot — Docker Compose
+# Telegram polling mode: single container, no nginx needed
+
+services:
+  bot:
+    build:
+      context: ./kenny_robinson_api
+      dockerfile: Dockerfile
+    container_name: kenny-rag-bot
+    restart: unless-stopped
+    env_file: .env
+    ports:
+      - "${HEALTH_PORT:-8042}:${HEALTH_PORT:-8042}"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:${HEALTH_PORT:-8042}/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"

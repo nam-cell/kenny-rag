@@ -1,0 +1,16 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(pip install:*)",
+      "Bash(python build_vector_db.py:*)",
+      "Bash(where:*)",
+      "Bash(python -m pip install:*)",
+      "Bash(py -0p:*)",
+      "Bash(python -m uv:*)",
+      "Bash(powershell -Command \"irm https://astral.sh/uv/install.ps1 | iex\")",
+      "Bash(set \"Path=C:\\\\Users\\\\NamD\\\\.local\\\\bin;%Path%\")",
+      "Bash(C:UsersNamD.localbinuv.exe:*)",
+      "Bash(powershell -Command:*)"
+    ]
+  }
+}

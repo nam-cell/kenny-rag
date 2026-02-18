@@ -1,0 +1,5 @@
+fastapi
+uvicorn
+chromadb
+python-telegram-bot>=21.0
+httpx
