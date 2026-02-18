@@ -4,6 +4,7 @@ Single-process: polling mode (no webhook/SSL needed)
 """
 
 import os
+import json
 import asyncio
 import logging
 from contextlib import asynccontextmanager
@@ -87,8 +88,8 @@ async def retrieve_chunks(question: str) -> list[dict]:
     return chunks
 
 
-async def generate_answer(question: str, chunks: list[dict]) -> str:
-    """Call Anthropic API with retrieved context."""
+async def generate_answer(question: str, chunks: list[dict], status_msg=None) -> str:
+    """Call Anthropic API with streaming, updating status_msg as tokens arrive."""
     context_block = "\n\n---\n\n".join(
         f"[Source: {c['source_name']}]\n{c['text']}" for c in chunks
     )
@@ -99,24 +100,58 @@ async def generate_answer(question: str, chunks: list[dict]) -> str:
 
 Question: {question}"""
 
-    async with httpx.AsyncClient(timeout=30.0) as client:
-        resp = await client.post(
+    headers = {
+        "x-api-key": ANTHROPIC_API_KEY,
+        "anthropic-version": "2023-06-01",
+        "content-type": "application/json",
+    }
+    payload = {
+        "model": ANTHROPIC_MODEL,
+        "max_tokens": 1024,
+        "stream": True,
+        "system": SYSTEM_PROMPT,
+        "messages": [{"role": "user", "content": user_message}],
+    }
+
+    full_text = ""
+    last_edit_len = 0
+
+    async with httpx.AsyncClient(timeout=60.0) as client:
+        async with client.stream(
+            "POST",
             "https://api.anthropic.com/v1/messages",
-            headers={
-                "x-api-key": ANTHROPIC_API_KEY,
-                "anthropic-version": "2023-06-01",
-                "content-type": "application/json",
-            },
-            json={
-                "model": ANTHROPIC_MODEL,
-                "max_tokens": 1024,
-                "system": SYSTEM_PROMPT,
-                "messages": [{"role": "user", "content": user_message}],
-            },
-        )
-        resp.raise_for_status()
-        data = resp.json()
-        return data["content"][0]["text"]
+            headers=headers,
+            json=payload,
+        ) as resp:
+            resp.raise_for_status()
+            async for line in resp.aiter_lines():
+                if not line.startswith("data: "):
+                    continue
+                data_str = line[6:]
+                if data_str.strip() == "[DONE]":
+                    break
+                try:
+                    event = json.loads(data_str)
+                except Exception:
+                    continue
+
+                if event.get("type") == "content_block_delta":
+                    delta = event.get("delta", {})
+                    if delta.get("type") == "text_delta":
+                        full_text += delta.get("text", "")
+
+                # Update message every ~150 chars so it feels live
+                if status_msg and len(full_text) - last_edit_len > 150:
+                    try:
+                        preview = full_text + " ✍️..."
+                        if len(preview) > 4096:
+                            preview = preview[:4090] + "..."
+                        await status_msg.edit_text(preview)
+                        last_edit_len = len(full_text)
+                    except Exception:
+                        pass  # Rate limit or same content — skip
+
+    return full_text
 
 
 # --- Telegram Handlers ---
@@ -167,8 +202,13 @@ async def handle_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if not chunks:
             await thinking_msg.edit_text("I couldn't find relevant info. Try rephrasing?")
             return
-        answer = await generate_answer(question, chunks)
+
         source_names = sorted(set(c["source_name"] for c in chunks))
+        await thinking_msg.edit_text(
+            f"📚 Found {len(source_names)} relevant sources. Writing answer..."
+        )
+
+        answer = await generate_answer(question, chunks, status_msg=thinking_msg)
         source_line = "\n\n📚 Sources: " + ", ".join(source_names)
         full_reply = answer + source_line
         if len(full_reply) > 4096:
@@ -315,13 +355,15 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
             return
 
-        answer = await generate_answer(question, chunks)
-
-        # Append source attribution
+        # Phase 2: show we found sources, now generating
         source_names = sorted(set(c["source_name"] for c in chunks))
-        source_line = "\n\n📚 Sources: " + ", ".join(source_names)
+        await thinking_msg.edit_text(
+            f"📚 Found {len(source_names)} relevant sources. Writing answer..."
+        )
 
-        # Telegram message limit is 4096 chars
+        answer = await generate_answer(question, chunks, status_msg=thinking_msg)
+
+        source_line = "\n\n📚 Sources: " + ", ".join(source_names)
         full_reply = answer + source_line
         if len(full_reply) > 4096:
             full_reply = full_reply[:4090] + "..."
